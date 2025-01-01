@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::env::*;
-use crate::eval;
 use crate::object::*;
 use crate::parser::*;
 
@@ -61,6 +60,60 @@ fn eval_binary_op(
                     left, right
                 )),
             },
+            "*" => match (&left, &right) {
+                (Object::Integer(l), Object::Integer(r)) => {
+                    return Ok(Object::Integer(l * r))
+                }
+                (Object::Float(l), Object::Float(r)) => {
+                    return Ok(Object::Float(l * r))
+                }
+                (Object::Integer(l), Object::Float(r)) => {
+                    return Ok(Object::Float(*l as f64 * r))
+                }
+                (Object::Float(l), Object::Integer(r)) => {
+                    return Ok(Object::Float(l * *r as f64))
+                }
+                _ => Err(format!(
+                    "Invalid types for * operator {} {}",
+                    left, right
+                )),
+            },
+            "/" => match (&left, &right) {
+                (Object::Integer(l), Object::Integer(r)) => {
+                    return Ok(Object::Integer(l / r))
+                }
+                (Object::Float(l), Object::Float(r)) => {
+                    return Ok(Object::Float(l / r))
+                }
+                (Object::Integer(l), Object::Float(r)) => {
+                    return Ok(Object::Float(*l as f64 / r))
+                }
+                (Object::Float(l), Object::Integer(r)) => {
+                    return Ok(Object::Float(l / *r as f64))
+                }
+                _ => Err(format!(
+                    "Invalid types for / operator {} {}",
+                    left, right
+                )),
+            },
+            "%" => match (&left, &right) {
+                (Object::Integer(l), Object::Integer(r)) => {
+                    return Ok(Object::Integer(l % r))
+                }
+                (Object::Float(l), Object::Float(r)) => {
+                    return Ok(Object::Float(l % r))
+                }
+                (Object::Integer(l), Object::Float(r)) => {
+                    return Ok(Object::Float(*l as f64 % r))
+                }
+                (Object::Float(l), Object::Integer(r)) => {
+                    return Ok(Object::Float(l % *r as f64))
+                }
+                _ => Err(format!(
+                    "Invalid types for % operator {} {}",
+                    left, right
+                )),
+            },
             "=" => match (&left, &right) {
                 (Object::Integer(l), Object::Integer(r)) => {
                     return Ok(Object::Bool(l == r))
@@ -70,6 +123,30 @@ fn eval_binary_op(
                 }
                 _ => Err(format!(
                     "Invalid types for = operator {} {}",
+                    left, right
+                )),
+            },
+            ">" => match (&left, &right) {
+                (Object::Integer(l), Object::Integer(r)) => {
+                    return Ok(Object::Bool(l > r))
+                }
+                (Object::String(l), Object::String(r)) => {
+                    return Ok(Object::Bool(l > r))
+                }
+                _ => Err(format!(
+                    "Invalid types for > operator {} {}",
+                    left, right
+                )),
+            },
+            "<" => match (&left, &right) {
+                (Object::Integer(l), Object::Integer(r)) => {
+                    return Ok(Object::Bool(l < r))
+                }
+                (Object::String(l), Object::String(r)) => {
+                    return Ok(Object::Bool(l < r))
+                }
+                _ => Err(format!(
+                    "Invalid types for < operator {} {}",
                     left, right
                 )),
             },
@@ -126,14 +203,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_int_int_add() {
+    fn test_add_int_int() {
         let mut env = Rc::new(RefCell::new(Env::new()));
         let result = eval("(+ 1 2)", &mut env).unwrap();
         assert_eq!(result, Object::Integer(3));
     }
 
     #[test]
-    fn test_int_float_add() {
+    fn test_add_int_float() {
         let mut env = Rc::new(RefCell::new(Env::new()));
 
         let result = eval("(+ 1 3.0)", &mut env).unwrap();
@@ -141,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    fn test_float_int_add() {
+    fn test_add_float_int() {
         let mut env = Rc::new(RefCell::new(Env::new()));
 
         let result = eval("(+ 2.0 2)", &mut env).unwrap();
@@ -149,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn test_float_float_add() {
+    fn test_add_float_float() {
         let mut env = Rc::new(RefCell::new(Env::new()));
 
         let result = eval("(+ 1.0 2.0)", &mut env).unwrap();
@@ -169,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn test_int_int_sub() {
+    fn test_sub_int_int() {
         let mut env = Rc::new(RefCell::new(Env::new()));
 
         let result = eval("(- 1 2)", &mut env).unwrap();
@@ -177,7 +254,7 @@ mod tests {
     }
 
     #[test]
-    fn test_int_float_sub() {
+    fn test_sub_int_float() {
         let mut env = Rc::new(RefCell::new(Env::new()));
 
         let result = eval("(- 1.0 2.0)", &mut env).unwrap();
@@ -185,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn test_float_int_sub() {
+    fn test_sub_float_int() {
         let mut env = Rc::new(RefCell::new(Env::new()));
 
         let result = eval("(- 2.0 2)", &mut env).unwrap();
@@ -236,4 +313,132 @@ mod tests {
             eval("(= \"hello\" \"hello\")", &mut env).unwrap();
         assert_eq!(reust, Object::Bool(true));
     }
+
+    #[test]
+    fn test_greater_than_str() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+        let result = eval("(> \"B\" \"A\")", &mut env).unwrap();
+        assert_eq!(result, Object::Bool(true));
+    }
+
+    #[test]
+    fn test_greater_than_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+        let result = eval("(> 2 3)", &mut env);
+        assert_eq!(result, Ok(Object::Bool(false)));
+    }
+
+    #[test]
+    fn test_less_than_str() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result =
+            eval("(< \"abcd\" \"abcf\")", &mut env).unwrap();
+        assert_eq!(result, Object::Bool(true));
+    }
+
+    #[test]
+    fn test_less_than_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(< 2 1)", &mut env).unwrap();
+        assert_eq!(result, Object::Bool(false));
+    }
+
+    #[test]
+    fn test_mutiply_int_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(* 2 3)", &mut env).unwrap();
+        assert_eq!(result, Object::Integer(6));
+    }
+
+    #[test]
+    fn test_mutiply_int_float() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(* 3 2.0)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(6.0));
+    }
+
+    #[test]
+    fn test_mutiply_float_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(* 2.0 3)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(6.0));
+    }
+
+    #[test]
+    fn test_mutiply_float_float() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(* 2.0 3.0)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(6.0));
+    }
+
+    #[test]
+    fn test_divide_int_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(/ 6 2)", &mut env).unwrap();
+        assert_eq!(result, Object::Integer(3));
+    }
+
+    #[test]
+    fn test_divide_int_float() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(/ 6 2.0)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(3.0));
+    }
+
+    #[test]
+    fn test_divide_float_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(/ 6.0 2)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(3.0));
+    }
+
+    #[test]
+    fn test_divide_float_float() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(/ 6.0 2.0)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(3.0));
+    }
+
+    #[test]
+    fn test_modulo_int_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(% 7 2)", &mut env).unwrap();
+        assert_eq!(result, Object::Integer(1));
+    }
+
+    #[test]
+    fn test_modulo_int_float() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(% 7 2.0)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(1.0));
+    }
+
+    #[test]
+    fn test_modulo_float_int() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(% 7.0 2)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(1.0));
+    }
+
+    #[test]
+    fn test_modulo_float_float() {
+        let mut env = Rc::new(RefCell::new(Env::new()));
+
+        let result = eval("(% 7.0 2.0)", &mut env).unwrap();
+        assert_eq!(result, Object::Float(1.0));
+    }
+
 }
