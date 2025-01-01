@@ -11,7 +11,7 @@ const PROMPT: &str = "lisp-rs> ";
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let reader = Interface::new(PROMPT).unwrap();
     reader.set_prompt(PROMPT).unwrap();
-    let mut env = Rc::new(RefCell::new(env::Env::new()));
+    let env = Rc::new(RefCell::new(env::Env::new()));
 
     while let ReadResult::Input(input) =
         reader.read_line().unwrap()
@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
 
-        let val = eval::eval(input.as_ref(), &mut env)?;
+        let val = eval::eval(input.as_ref(), env.clone())?;
         match val {
             Object::Void => {}
             Object::Integer(n) => println!("{}", n),
