@@ -28,7 +28,7 @@ impl Tokenizer<'_> {
         let current_char = input.next();
 
         let keywords = vec![
-            "define", "list", "print", "lambda", "range",
+            "define", "lambda", "list", "print", "range",
             "cons", "car", "cdr", "length", "null?", "begin",
             "let", "if", "else", "cond",
         ]

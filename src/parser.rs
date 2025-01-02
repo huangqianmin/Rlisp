@@ -3,7 +3,7 @@ use crate::object::*;
 use std::error::Error;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ParseError {
     err: String,
 }

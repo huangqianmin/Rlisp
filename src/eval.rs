@@ -177,14 +177,67 @@ fn eval_define(
         ));
     }
 
-    let name = match &list[0] {
-        Object::Symbol(name) => name.clone(),
+    let (name, value) = match &list[0] {
+        Object::Symbol(name) => {
+            (name.clone(), eval_obj(&list[1], env.clone())?)
+        }
+        Object::List(l) => {
+            let name = match &l[0] {
+                Object::Symbol(name) => name.clone(),
+                _ => return Err(format!("Invalid define")),
+            };
+
+            let params = Object::List(l[1..].to_vec());
+            let body = Object::List(vec![list[1].clone()]);
+            let value =
+                eval_lambda(&[params, body], env.clone())?;
+
+            (name, value)
+        }
         _ => return Err(format!("Invalid define")),
     };
-    let value = eval_obj(&list[1], env.clone())?;
 
     env.borrow_mut().set(name, value);
     Ok(Object::Void)
+}
+
+fn eval_lambda(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 2 {
+        return Err(format!(
+            "Invalid number of arguments for lambda"
+        ));
+    }
+
+    let params = match &list[0] {
+        Object::List(list) => {
+            let mut params = vec![];
+            for param in list {
+                match param {
+                    Object::Symbol(param) => {
+                        params.push(param.clone())
+                    }
+                    _ => {
+                        return Err(format!(
+                            "Invalid lambda parameter {:?}",
+                            param
+                        ))
+                    }
+                }
+            }
+            params
+        }
+        _ => return Err(format!("Invalid lambda")),
+    };
+
+    let body = match &list[1] {
+        Object::List(list) => list.to_vec(),
+        _ => return Err(format!("Invalid lambda")),
+    };
+
+    Ok(Object::Lambda(params, body, env.clone()))
 }
 
 fn eval_keyword(
@@ -195,15 +248,16 @@ fn eval_keyword(
     match head {
         "begin" => eval_begin(list, env.clone()),
         "define" => eval_define(list, env.clone()),
+        "lambda" => eval_lambda(list, env.clone()),
         _ => todo!(),
     }
 }
 
 fn eval_symbol(
-    name: &str,
+    name: String,
     env: Rc<RefCell<Env>>,
 ) -> Result<Object, String> {
-    match env.borrow().get(name) {
+    match env.borrow().get(&name) {
         Some(value) => Ok(value),
         None => Err(format!("Undefined symbol {}", name)),
     }
@@ -213,10 +267,10 @@ fn eval_obj(
     obj: &Object,
     env: Rc<RefCell<Env>>,
 ) -> Result<Object, String> {
-    let current_obj = obj;
-    let current_env = env.clone();
+    let mut current_obj = Box::new(obj.clone());
+    let mut current_env = env.clone();
     loop {
-        match current_obj {
+        match *current_obj {
             Object::List(list) => {
                 let head = &list[0];
                 match head {
@@ -228,19 +282,98 @@ fn eval_obj(
                         )
                     }
                     Object::Keyword(keyword) => {
+                        if keyword == "if" {
+                            //  todo 无else 可能
+                            if list.len() != 4 {
+                                return Err(format!("Invalid number of arguments for if"));
+                            }
+
+                            let cond_obj = eval_obj(
+                                &list[1],
+                                current_env.clone(),
+                            )?;
+                            let cond = match cond_obj {
+                                Object::Bool(cond) => cond,
+                                _ => {
+                                    return Err(format!(
+                                        "Condition must be bool"
+                                    ))
+                                }
+                            };
+
+                            if cond {
+                                current_obj =
+                                    Box::new(list[2].clone());
+                            } else {
+                                current_obj =
+                                    Box::new(list[3].clone());
+                            }
+                            continue;
+                        }
                         return eval_keyword(
                             keyword,
                             &list[1..],
                             current_env,
-                        )
+                        );
+                    }
+                    Object::Symbol(sym) => {
+                        let lambda =
+                            current_env.borrow().get(sym);
+
+                        if lambda.is_none() {
+                            return Err(format!(
+                                "Unbound function: {}",
+                                sym
+                            ));
+                        }
+
+                        let func = lambda.unwrap();
+                        match func {
+                            Object::Lambda(
+                                params,
+                                body,
+                                func_env,
+                            ) => {
+                                let new_env = Rc::new(
+                                    RefCell::new(Env::extend(
+                                        func_env.clone(),
+                                    )),
+                                );
+
+                                //  传入参数
+                                for (param, arg) in params
+                                    .iter()
+                                    .zip(list[1..].iter())
+                                {
+                                    new_env.borrow_mut().set(
+                                        param.clone(),
+                                        eval_obj(
+                                            arg,
+                                            current_env.clone(),
+                                        )?,
+                                    )
+                                }
+                                current_obj =
+                                    Box::new(Object::List(body));
+                                current_env = new_env;
+                            }
+                            _ => {
+                                return Err(format!(
+                                    "Not a lambda {} {}",
+                                    sym, func
+                                ))
+                            }
+                        }
+                    }
+                    Object::List(_) => {
+                        current_obj = Box::new(head.clone());
+                        continue;
                     }
                     _ => todo!(),
                 }
             }
-            Object::Integer(i) => {
-                return Ok(Object::Integer(*i))
-            }
-            Object::Float(f) => return Ok(Object::Float(*f)),
+            Object::Integer(i) => return Ok(Object::Integer(i)),
+            Object::Float(f) => return Ok(Object::Float(f)),
             Object::String(s) => {
                 return Ok(Object::String(s.clone()))
             }
@@ -260,6 +393,7 @@ pub fn eval(
     if parsed_list.is_err() {
         return Err(format!("{}", parsed_list.err().unwrap()));
     }
+
     eval_obj(&parsed_list.unwrap(), env.clone())
 }
 
@@ -506,7 +640,7 @@ mod tests {
     }
 
     #[test]
-    fn test_area_of_a_circle() {
+    fn test_area_of_a_circle_float() {
         let env = Rc::new(RefCell::new(Env::new()));
         let program = "
                 (begin
@@ -541,5 +675,134 @@ mod tests {
         );
     }
 
-    
+    #[test]
+    fn test_area_of_a_circle_int() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+                (begin
+                    (define r 10)
+                    (define pi 314)
+                    (* pi (* r r))
+                )";
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(314 * 10 * 10));
+    }
+
+    #[test]
+    fn test_sqr_function() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+                (begin
+                    (define sqr (lambda (r) (* r r))) 
+                    (sqr 10)
+                )";
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((10 * 10) as i64));
+    }
+
+    #[test]
+    fn test_fibonaci() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define fib (lambda (n) 
+                      (if (< n 2) 1 
+                          (+ (fib (- n 1)) 
+                              (fib (- n 2))))))
+                  (fib 10)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((89) as i64));
+    }
+
+    #[test]
+    fn test_factorial() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define fact (lambda (n) (if (< n 1) 1 (* n (fact (- n 1))))))
+                  (fact 5)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((120) as i64));
+    }
+
+    #[test]
+    fn test_circle_area_no_lambda() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define pi 314)
+                  (define r 10)
+                  (define (sqr r) (* r r))
+                  (define (area r) (* pi (sqr r)))
+                  (area r)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::Integer((314 * 10 * 10) as i64)
+        );
+    }
+
+    #[test]
+    fn test_circle_area_function() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define pi 314)
+                  (define r 10)
+                  (define sqr (lambda (r) (* r r)))
+                  (define area (lambda (r) (* pi (sqr r))))
+                  (area r)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::Integer((314 * 10 * 10) as i64)
+        );
+    }
+
+    #[test]
+    fn test_tail_recursion() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define sum-n 
+                     (lambda (n a) 
+                        (if (= n 0) a 
+                            (sum-n (- n 1) (+ n a)))))
+                  (sum-n 10000 0)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((50_005_000) as i64));
+    }
+
+    #[test]
+    fn test_tail_recursive_factorial() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define fact 
+                      (lambda (n a) 
+                        (if (= n 1) a 
+                          (fact (- n 1) (* n a)))))
+                          
+                  (fact 10 1)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((3628800) as i64));
+    }
 }

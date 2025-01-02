@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::object::*;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct Env {
     parent: Option<Rc<RefCell<Env>>>,
     vars: HashMap<String, Object>,

@@ -1,4 +1,6 @@
-use std::fmt;
+use std::{cell::RefCell, fmt, rc::Rc};
+
+use crate::env::Env;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
@@ -11,7 +13,7 @@ pub enum Object {
     String(String),
     Symbol(String),
     ListData(Vec<Object>),
-    Lambda(Vec<String>, Vec<Object>),
+    Lambda(Vec<String>, Vec<Object>, Rc<RefCell<Env>>),
     List(Vec<Object>),
 }
 
