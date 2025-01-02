@@ -282,6 +282,7 @@ fn eval_obj(
                         )
                     }
                     Object::Keyword(keyword) => {
+                        //  放在这里，进行尾递归优化
                         if keyword == "if" {
                             //  todo 无else 可能
                             if list.len() != 4 {
@@ -804,5 +805,362 @@ mod tests {
 
         let result = eval(program, env).unwrap();
         assert_eq!(result, Object::Integer((3628800) as i64));
+    }
+
+    #[test]
+    fn test_closure1() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define add-n 
+                     (lambda (n) 
+                        (lambda (a) (+ n a))))
+                  (define add-5 (add-n 5))
+                  (add-5 10)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((15) as i64));
+    }
+
+    #[test]
+    fn test_tail_recursive_fibonnaci() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (begin
+                  (define fib
+                    (lambda (n a b) 
+                       (if (= n 0) a 
+                         (if (= n 1) b 
+                            (fib (- n 1) b (+ a b))))))
+                    
+                  (fib 10 0 1)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((55) as i64));
+    }
+
+    #[test]
+    fn test_inline_lambda() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              ((lambda (x y) (+ x y)) 10 20)
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((30) as i64));
+    }
+
+    #[test]
+    fn test_car() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (car (list 1 2 3))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((1) as i64));
+    }
+
+    #[test]
+    fn test_cdr() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (cdr (list 1 2 3))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::ListData(vec![
+                Object::Integer(2),
+                Object::Integer(3),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_length() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (length (list 1 2 3))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((3) as i64));
+    }
+
+    #[test]
+    fn test_sum_list_of_integers() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define sum-list 
+                  (lambda (l) 
+                      (if (null? l) 0 
+                          (+ (car l) (sum-list (cdr l))))))
+              (sum-list (list 1 2 3 4 5))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(15));
+    }
+
+    #[test]
+    fn test_function_application() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define (double value) 
+                  (* 2 value))
+              (define (apply-twice fn value) 
+                  (fn (fn value)))
+          
+              (apply-twice double 5)
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((20) as i64));
+    }
+
+    #[test]
+    fn test_begin_scope_test() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define a 10)
+              (define b 20)
+              (define c 30)
+              (begin
+                  (define a 20)
+                  (define b 30)
+                  (define c 40)
+                  (list a b c)
+              )
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::ListData(vec![
+                Object::Integer(20),
+                Object::Integer(30),
+                Object::Integer(40),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_begin_scope_test_2() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin 
+              (define x 10)
+              (begin
+                  (define x 20)
+                  x 
+              )
+              x
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer((10) as i64));
+    }
+
+    #[test]
+    fn test_cond_1() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (cond ((> 2 1) 5) 
+                    ((< 2 1) 10) 
+                    (else 15)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(5));
+    }
+
+    #[test]
+    fn test_cond_2() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (cond ((> 1 2) 5) 
+                    ((< 1 2) 10) 
+                    (else 15)
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(10));
+    }
+
+    #[test]
+    fn test_cond_3() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (cond ((> 1 2) 5) 
+                    ((< 1 0) 10) 
+                    (else 15)
+              )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(15));
+    }
+
+    #[test]
+    fn test_let_1() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (let ((a 10) (b 20))
+                  (list a b)
+              )
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::ListData(vec![
+                Object::Integer(10),
+                Object::Integer(20),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_let_2() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define a 100)
+              (let ((a 10) (b 20))
+                  (list a b)
+              )
+              a
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(100));
+    }
+
+    #[test]
+    fn test_let_3() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+              (let ((x 2) (y 3))
+                  (let ((x 7)
+                        (z (+ x y)))
+                      (* z x))) 
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(35));
+    }
+
+    #[test]
+    fn test_map() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define (map f l)
+                  (if (null? l) 
+                      (list) 
+                      (cons (f (car l)) (map f (cdr l)))))
+              (map (lambda (x) (* x x)) (list 1 2 3 4 5))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::ListData(vec![
+                Object::Integer(1),
+                Object::Integer(4),
+                Object::Integer(9),
+                Object::Integer(16),
+                Object::Integer(25),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_filter() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define (filter f l)
+                  (if (null? l) 
+                      (list) 
+                      (if (f (car l)) 
+                          (cons (car l) (filter f (cdr l))) 
+                          (filter f (cdr l)))))
+              (filter (lambda (x) (> x 2)) (list 1 2 3 4 5))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(
+            result,
+            Object::ListData(vec![
+                Object::Integer(3),
+                Object::Integer(4),
+                Object::Integer(5),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_fold_left() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define (fold-left f acc l)
+                  (if (null? l) 
+                      acc 
+                      (fold-left f (f acc (car l)) (cdr l))))
+              (fold-left (lambda (acc x) (+ acc x)) 0 (list 1 2 3 4 5))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(15));
+    }
+
+    #[test]
+    fn test_reduce() {
+        let env = Rc::new(RefCell::new(Env::new()));
+        let program = "
+          (begin
+              (define (reduce f l)
+                  (if (null? l) 
+                      (list) 
+                      (if (null? (cdr l)) 
+                          (car l) 
+                          (f (car l) (reduce f (cdr l))))))
+              (reduce (lambda (x y) (+ x y)) (list 1 2 3 4 5))
+          )
+          ";
+
+        let result = eval(program, env).unwrap();
+        assert_eq!(result, Object::Integer(15));
     }
 }
