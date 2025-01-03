@@ -240,6 +240,114 @@ fn eval_lambda(
     Ok(Object::Lambda(params, body, env.clone()))
 }
 
+fn eval_list(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    let mut list_data = vec![];
+
+    for obj in list {
+        list_data.push(eval_obj(obj, env.clone())?);
+    }
+    Ok(Object::ListData(list_data))
+}
+
+fn eval_car(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 1 {
+        return Err(format!(
+            "Invalid number of arguments for car"
+        ));
+    }
+
+    let obj = eval_obj(&list[0], env.clone())?;
+
+    match obj {
+        Object::ListData(list) => Ok(list[0].clone()),
+        _ => {
+            Err(format!("Invalid type car argument {}", list[0]))
+        }
+    }
+}
+
+fn eval_cdr(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 1 {
+        return Err(format!(
+            "Invalid number of arguments for cdr"
+        ));
+    }
+
+    let obj = eval_obj(&list[0], env.clone())?;
+
+    match obj {
+        Object::ListData(list) => {
+            if list.len() >= 1 {
+                Ok(Object::ListData(list[1..].to_vec()))
+            } else {
+                Err(format!("Invalid number of list data"))
+            }
+        }
+        _ => {
+            Err(format!("Invalid type cdr argument {}", list[0]))
+        }
+    }
+}
+
+fn eval_length(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 1 {
+        return Err(format!(
+            "Invalid number of arguments for length"
+        ));
+    }
+
+    let obj = eval_obj(&list[0], env.clone())?;
+
+    match obj {
+        Object::ListData(list) => {
+            Ok(Object::Integer(list.len() as i64))
+        }
+        _ => Err(format!(
+            "Invalid type length argument {}",
+            list[0]
+        )),
+    }
+}
+
+fn eval_is_null(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 1 {
+        return Err(format!(
+            "Invalid number of arguments for is_null"
+        ));
+    }
+
+    let obj = eval_obj(&list[0], env.clone())?;
+
+    match obj {
+        Object::ListData(list) => {
+            if list.is_empty() {
+                Ok(Object::Bool(true))
+            } else {
+                Ok(Object::Bool(false))
+            }
+        }
+        _ => Err(format!(
+            "Invalid type null? argument {}",
+            list[0]
+        )),
+    }
+}
+
 fn eval_keyword(
     head: &str,
     list: &[Object],
@@ -249,6 +357,11 @@ fn eval_keyword(
         "begin" => eval_begin(list, env.clone()),
         "define" => eval_define(list, env.clone()),
         "lambda" => eval_lambda(list, env.clone()),
+        "list" => eval_list(list, env.clone()),
+        "car" => eval_car(list, env.clone()),
+        "cdr" => eval_cdr(list, env.clone()),
+        "length" => eval_length(list, env.clone()),
+        "null?" => eval_is_null(list, env.clone()),
         _ => todo!(),
     }
 }
