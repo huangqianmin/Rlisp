@@ -348,6 +348,123 @@ fn eval_is_null(
     }
 }
 
+fn eval_cond(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    for obj in list {
+        match obj {
+            Object::List(list) => {
+                if list.len() != 2 {
+                    return Err(format!(
+                        "Invalid number of arguments for cond"
+                    ));
+                }
+
+                if list[0] == Object::Keyword("else".to_string())
+                {
+                    return eval_obj(&list[1], env.clone());
+                }
+                let cond_obj = eval_obj(&list[0], env.clone())?;
+                let cond = match cond_obj {
+                    Object::Bool(cond) => cond,
+                    _ => {
+                        return Err(format!(
+                            "Invalid type cond argument {}",
+                            cond_obj
+                        ))
+                    }
+                };
+                if cond {
+                    return eval_obj(&list[1], env.clone());
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "Invalid type cond argument {}",
+                    obj
+                ))
+            }
+        }
+    }
+
+    Err("No cond clause matched".to_string())
+}
+
+fn eval_let(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 2 {
+        return Err(format!(
+            "Invalid number of arguments for let"
+        ));
+    }
+
+    let new_env =
+        Rc::new(RefCell::new(Env::extend(env.clone())));
+    let bindings = match &list[0] {
+        Object::List(list) => list.to_vec(),
+        _ => return Err(format!("Invalid let")),
+    };
+
+    for obj in bindings {
+        match obj {
+            Object::List(list) => {
+                if list.len() != 2 {
+                    return Err(format!(
+                        "Invalid number of arguments for let"
+                    ));
+                }
+
+                let name = match &list[0] {
+                    Object::Symbol(name) => name.clone(),
+                    _ => {
+                        return Err(format!(
+                            "Invalid let argument {}",
+                            list[0]
+                        ))
+                    }
+                };
+
+                let value = eval_obj(&list[1], env.clone())?;
+                new_env.borrow_mut().set(name, value);
+            }
+            _ => {
+                return Err(format!(
+                    "Invalid let argument {}",
+                    obj
+                ))
+            }
+        }
+    }
+
+    return eval_obj(&list[1], new_env);
+}
+
+fn eval_cons(
+    list: &[Object],
+    env: Rc<RefCell<Env>>,
+) -> Result<Object, String> {
+    if list.len() != 2 {
+        return Err(format!(
+            "Invalid number of arguments for cons"
+        ));
+    }
+
+    let head = eval_obj(&list[0], env.clone())?;
+    let tail = eval_obj(&list[1], env.clone())?;
+
+    //  合并listdata
+    match tail {
+        Object::ListData(mut l) => {
+            l.insert(0, head);
+            Ok(Object::ListData(l))
+        }
+        _ => Err(format!("Invalid type cons argument {}", tail)),
+    }
+}
+
 fn eval_keyword(
     head: &str,
     list: &[Object],
@@ -362,6 +479,9 @@ fn eval_keyword(
         "cdr" => eval_cdr(list, env.clone()),
         "length" => eval_length(list, env.clone()),
         "null?" => eval_is_null(list, env.clone()),
+        "cond" => eval_cond(list, env.clone()),
+        "let" => eval_let(list, env.clone()),
+        "cons" => eval_cons(list, env.clone()),
         _ => todo!(),
     }
 }
@@ -510,6 +630,9 @@ fn eval_obj(
                             )?);
                         }
 
+                        if new_list.len() == 1 {
+                            return Ok(new_list[0].clone());
+                        }
                         current_obj =
                             Box::new(Object::List(new_list));
                     }
