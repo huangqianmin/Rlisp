@@ -188,7 +188,7 @@ fn eval_define(
             };
 
             let params = Object::List(l[1..].to_vec());
-            let body = Object::List(vec![list[1].clone()]);
+            let body = list[1].clone();
             let value =
                 eval_lambda(&[params, body], env.clone())?;
 
@@ -233,7 +233,7 @@ fn eval_lambda(
     };
 
     let body = match &list[1] {
-        Object::List(list) => list.to_vec(),
+        Object::List(l) => l.clone(),
         _ => return Err(format!("Invalid lambda")),
     };
 
@@ -624,17 +624,29 @@ fn eval_obj(
                     _ => {
                         let mut new_list = vec![];
                         for obj in list {
-                            new_list.push(eval_obj(
+                            let result = eval_obj(
                                 &obj,
                                 current_env.clone(),
-                            )?);
+                            )?;
+
+                            if result != Object::Void {
+                                new_list.push(result);
+                            }
                         }
 
-                        if new_list.len() == 1 {
-                            return Ok(new_list[0].clone());
+                        let head = &new_list[0];
+                        match head {
+                            Object::Lambda(_, _, _) => {
+                                current_obj = Box::new(
+                                    Object::List(new_list),
+                                );
+                            }
+                            _ => {
+                                return Ok(Object::List(
+                                    new_list,
+                                ))
+                            }
                         }
-                        current_obj =
-                            Box::new(Object::List(new_list));
                     }
                 }
             }
