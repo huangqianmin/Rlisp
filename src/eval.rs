@@ -273,6 +273,7 @@ fn eval_obj(
         match *current_obj {
             Object::List(list) => {
                 let head = &list[0];
+
                 match head {
                     Object::BinaryOp(op) => {
                         return eval_binary_op(
@@ -366,11 +367,39 @@ fn eval_obj(
                             }
                         }
                     }
-                    Object::List(_) => {
-                        current_obj = Box::new(head.clone());
-                        continue;
+                    Object::Lambda(params, body, func_env) => {
+                        let new_env = Rc::new(RefCell::new(
+                            Env::extend(func_env.clone()),
+                        ));
+
+                        for (param, arg) in
+                            params.iter().zip(list[1..].iter())
+                        {
+                            new_env.borrow_mut().set(
+                                param.clone(),
+                                eval_obj(
+                                    arg,
+                                    current_env.clone(),
+                                )?,
+                            )
+                        }
+
+                        current_obj =
+                            Box::new(Object::List(body.clone()));
+                        current_env = new_env;
                     }
-                    _ => todo!(),
+                    _ => {
+                        let mut new_list = vec![];
+                        for obj in list {
+                            new_list.push(eval_obj(
+                                &obj,
+                                current_env.clone(),
+                            )?);
+                        }
+
+                        current_obj =
+                            Box::new(Object::List(new_list));
+                    }
                 }
             }
             Object::Integer(i) => return Ok(Object::Integer(i)),
