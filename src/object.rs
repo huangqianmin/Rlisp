@@ -20,25 +20,45 @@ pub enum Object {
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Object::Void => write!(f, "void"),
+            Object::Void => write!(f, "Void"),
             Object::Keyword(s) => write!(f, "{}", s),
             Object::BinaryOp(s) => write!(f, "{}", s),
-            Object::Integer(i) => write!(f, "{}", i),
-            Object::Float(i) => write!(f, "{}", i),
+            Object::Integer(n) => write!(f, "{}", n),
+            Object::Float(n) => write!(f, "{}", n),
             Object::Bool(b) => write!(f, "{}", b),
-            Object::String(s) => write!(f, "{}", s),
             Object::Symbol(s) => write!(f, "{}", s),
-            Object::ListData(list) => {
-                write!(f, "(");
-                for (i, obj) in list.iter().enumerate() {
+            Object::String(s) => write!(f, "{}", s),
+            Object::Lambda(params, body, _env) => {
+                write!(f, "Lambda(")?;
+                for param in params {
+                    write!(f, "{} ", param)?;
+                }
+                write!(f, ")")?;
+                for expr in (*body).iter() {
+                    write!(f, " {}", expr)?;
+                }
+                Ok(())
+            }
+            Object::List(list) => {
+                write!(f, "(")?;
+                for (i, obj) in (*list).iter().enumerate() {
                     if i > 0 {
-                        write!(f, " ");
+                        write!(f, " ")?;
                     }
-                    write!(f, "{}", obj);
+                    write!(f, "{}", obj)?;
                 }
                 write!(f, ")")
             }
-            _ => write!(f, "something cant be displayed"),
+            Object::ListData(list) => {
+                write!(f, "(")?;
+                for (i, obj) in list.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", obj)?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }

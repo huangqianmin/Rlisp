@@ -23,10 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let val = eval::eval(input.as_ref(), env.clone())?;
         match val {
             Object::Void => {}
-            Object::Integer(n) => println!("{}", n),
-            Object::Bool(b) => println!("{}", b),
-            Object::Symbol(s) => println!("{}", s),
-            _ => println!("{:?}", val),
+            _ => println!("{}", val),
         };
     }
 
